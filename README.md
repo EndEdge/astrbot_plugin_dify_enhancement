@@ -1,8 +1,6 @@
-# helloworld
+# dify增强插件
 
-AstrBot 插件模板
-
-A template plugin for AstrBot plugin feature
+dify增强插件，增加输入内容，适配特殊的输出格式
 
 # 支持
 

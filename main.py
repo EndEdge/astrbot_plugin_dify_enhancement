@@ -1,8 +1,12 @@
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
-from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+import json
 
-@register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
+from astrbot.api import logger
+from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.star import Context, Star, register
+from astrbot.core.provider.entities import ProviderRequest, LLMResponse
+
+
+@register("dify_enhancement", "EndEdge", "dify增强插件，增加输入内容，适配特殊的输出格式", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -22,3 +26,17 @@ class MyPlugin(Star):
 
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
+
+    @filter.on_llm_request()
+    async def my_custom_hook_1(self, event: AstrMessageEvent, req: ProviderRequest):
+        uid = event.unified_msg_origin
+        curr_cid = await self.context.conversation_manager.get_curr_conversation_id(uid)
+        conversation = await self.context.conversation_manager.get_conversation(uid, curr_cid)  # Conversation
+        history = json.loads(conversation.history)  # 获取上下文
+        print(req)
+        print(history)
+        req.system_prompt += "自定义 system_prompt"
+
+    @filter.on_llm_response()
+    async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
+        print(resp)
