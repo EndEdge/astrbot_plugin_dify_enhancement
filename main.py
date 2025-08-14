@@ -33,10 +33,10 @@ class MyPlugin(Star):
         curr_cid = await self.context.conversation_manager.get_curr_conversation_id(uid)
         conversation = await self.context.conversation_manager.get_conversation(uid, curr_cid)  # Conversation
         history = json.loads(conversation.history)  # 获取上下文
-        print(req)
-        print(history)
+        logger.info(req)
+        logger.info(history)
         req.system_prompt += "自定义 system_prompt"
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-        print(resp)
+        logger.info(resp)
