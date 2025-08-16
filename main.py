@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
@@ -54,42 +55,25 @@ class MyPlugin(Star):
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
+        logging.info(resp)
         try:
             # 获取响应文本内容
-            if resp.result_chain and resp.result_chain.chain:
-                # 从 result_chain 中获取文本内容
-                original_text = resp.result_chain.get_plain_text()
-            else:
-                # 从 _completion_text 获取文本内容
-                original_text = resp.completion_text
+            original_text = resp.completion_text
 
             # 尝试解析文本内容中的 JSON
             response_dict = json.loads(original_text)
             response_data = ResponseData.from_dict(response_dict)
 
+            # 清空 result_chain 中的内容
+            resp.result_chain.chain = []
+            resp.completion_text = ""
+
             # 检查 should_reply 字段
             if response_data.should_reply:
-                # 如果 should_reply 为 true，使用 reply_content 的内容
-                if resp.result_chain and resp.result_chain.chain:
-                    # 清空 result_chain 中的内容
-                    resp.result_chain.chain = []
-                else:
-                    resp.result_chain.message(response_data.reply_content)
-            else:
-                # 如果 should_reply 为 false，清空响应内容
-                if resp.result_chain and resp.result_chain.chain:
-                    # 清空 result_chain 中的内容
-                    resp.result_chain.chain = []
-                else:
-                    # 清空 _completion_text
-                    resp.completion_text = ""
+                resp.result_chain.message(response_data.reply_content)
 
         except Exception as e:
-            # 任何异常情况下都清空内容
-            if resp.result_chain and resp.result_chain.chain:
-                # 清空 result_chain 中的内容
-                resp.result_chain.chain = []
-            else:
-                # 清空 _completion_text
-                resp.completion_text = ""
+            # 清空 result_chain 中的内容
+            resp.result_chain.chain = []
+            resp.completion_text = ""
             logger.warning(f"Error processing LLM response, content cleared: {e}")
