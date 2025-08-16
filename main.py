@@ -1,5 +1,4 @@
 import json
-import logging
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
@@ -55,7 +54,7 @@ class MyPlugin(Star):
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-        logging.info(resp)
+        logger.info(resp)
         try:
             # 获取响应文本内容
             original_text = resp.completion_text
