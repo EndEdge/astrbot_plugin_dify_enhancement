@@ -50,7 +50,7 @@ class MyPlugin(Star):
         }
 
         # 将构造的 JSON 转换为字符串并赋值给 req.prompt
-        req.prompt = json.dumps(new_prompt, ensure_ascii=False)
+        req.system_prompt = json.dumps(new_prompt, ensure_ascii=False)
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
