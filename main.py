@@ -1,9 +1,28 @@
 import json
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
 
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.core.provider.entities import ProviderRequest, LLMResponse
+
+
+@dataclass
+class ResponseData:
+    should_reply: bool
+    reply_content: str = ""
+    source_agent: Optional[str] = None
+    debug_info: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'ResponseData':
+        return cls(
+            should_reply=data.get("should_reply", False),
+            reply_content=data.get("reply_content", ""),
+            source_agent=data.get("source_agent"),
+            debug_info=data.get("debug_info")
+        )
 
 
 @register("dify_enhancement", "EndEdge", "dify增强插件，增加输入内容，适配特殊的输出格式", "1.0.0")
@@ -13,30 +32,64 @@ class MyPlugin(Star):
 
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
-    
-    # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
-    @filter.command("helloworld")
-    async def helloworld(self, event: AstrMessageEvent):
-        """这是一个 hello world 指令""" # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
-        user_name = event.get_sender_name()
-        message_str = event.message_str # 用户发的纯文本消息字符串
-        message_chain = event.get_messages() # 用户所发的消息的消息链 # from astrbot.api.message_components import *
-        logger.info(message_chain)
-        yield event.plain_result(f"Hello, {user_name}, 你发了 {message_str}!") # 发送一条纯文本消息
 
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
 
     @filter.on_llm_request()
-    async def my_custom_hook_1(self, event: AstrMessageEvent, req: ProviderRequest):
+    async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
         uid = event.unified_msg_origin
         curr_cid = await self.context.conversation_manager.get_curr_conversation_id(uid)
         conversation = await self.context.conversation_manager.get_conversation(uid, curr_cid)  # Conversation
         history = json.loads(conversation.history)  # 获取上下文
-        logger.info(req)
-        logger.info(history)
-        req.system_prompt += "自定义 system_prompt"
+
+        # 构造新的 JSON 结构，只取最后10条消息
+        new_prompt = {
+            "chat_history": history[-10:] if len(history) > 10 else history,
+            "current_message": req.prompt
+        }
+
+        # 将构造的 JSON 转换为字符串并赋值给 req.prompt
+        req.prompt = json.dumps(new_prompt, ensure_ascii=False)
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-        logger.info(resp)
+        try:
+            # 获取响应文本内容
+            if resp.result_chain and resp.result_chain.chain:
+                # 从 result_chain 中获取文本内容
+                original_text = resp.result_chain.get_plain_text()
+            else:
+                # 从 _completion_text 获取文本内容
+                original_text = resp.completion_text
+
+            # 尝试解析文本内容中的 JSON
+            response_dict = json.loads(original_text)
+            response_data = ResponseData.from_dict(response_dict)
+
+            # 检查 should_reply 字段
+            if response_data.should_reply:
+                # 如果 should_reply 为 true，使用 reply_content 的内容
+                if resp.result_chain and resp.result_chain.chain:
+                    # 清空 result_chain 中的内容
+                    resp.result_chain.chain = []
+                else:
+                    resp.result_chain.message(response_data.reply_content)
+            else:
+                # 如果 should_reply 为 false，清空响应内容
+                if resp.result_chain and resp.result_chain.chain:
+                    # 清空 result_chain 中的内容
+                    resp.result_chain.chain = []
+                else:
+                    # 清空 _completion_text
+                    resp.completion_text = ""
+
+        except Exception as e:
+            # 任何异常情况下都清空内容
+            if resp.result_chain and resp.result_chain.chain:
+                # 清空 result_chain 中的内容
+                resp.result_chain.chain = []
+            else:
+                # 清空 _completion_text
+                resp.completion_text = ""
+            logger.warning(f"Error processing LLM response, content cleared: {e}")
