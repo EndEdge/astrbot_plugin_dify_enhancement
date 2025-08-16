@@ -1,5 +1,5 @@
 name: dify_enhancement
 desc: dify增强插件，增加输入内容，适配特殊的输出格式
-version: v0.1
+version: v0.2
 author: EndEdge
 repo: https://github.com/EndEdge/astrbot_plugin_dify_enhancement
