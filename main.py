@@ -63,16 +63,14 @@ class MyPlugin(Star):
             response_dict = json.loads(original_text)
             response_data = ResponseData.from_dict(response_dict)
 
-            # 清空 result_chain 中的内容
-            resp.result_chain.chain = []
-            resp.completion_text = ""
+            # 清空返回内容
+            resp.completion_text("")
 
             # 检查 should_reply 字段
             if response_data.should_reply:
-                resp.result_chain.message(response_data.reply_content)
+                resp.completion_text(response_data.reply_content)
 
         except Exception as e:
-            # 清空 result_chain 中的内容
-            resp.result_chain.chain = []
-            resp.completion_text = ""
+            # 清空返回内容
+            resp.completion_text("")
             logger.warning(f"Error processing LLM response, content cleared: {e}")
