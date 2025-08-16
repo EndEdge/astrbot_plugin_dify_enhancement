@@ -54,7 +54,6 @@ class MyPlugin(Star):
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-        logger.info(resp)
         try:
             # 获取响应文本内容
             original_text = resp.completion_text
@@ -64,13 +63,13 @@ class MyPlugin(Star):
             response_data = ResponseData.from_dict(response_dict)
 
             # 清空返回内容
-            resp.completion_text("")
+            resp.completion_text = ""
 
             # 检查 should_reply 字段
             if response_data.should_reply:
-                resp.completion_text(response_data.reply_content)
+                resp.completion_text = response_data.reply_content
 
         except Exception as e:
             # 清空返回内容
-            resp.completion_text("")
+            resp.completion_text = ""
             logger.warning(f"Error processing LLM response, content cleared: {e}")
