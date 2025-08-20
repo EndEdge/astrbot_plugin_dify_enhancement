@@ -21,10 +21,11 @@ class MyPlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
-        logger.info(self)
-        logger.info(event)
         try:
-            curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.unified_msg_origin)
+            curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.get_group_id())
+            logger.info('curr_id:' + curr_cid)
+            # if curr_cid is None:
+            #     curr_cid = self.context.conversation_manager.new_conversation(event.get_group_id())
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
             context = json.loads(conversation.history)
             logger.info(context)
