@@ -46,7 +46,7 @@ class MyPlugin(Star):
         # 构造新的 JSON 结构，只取最后10条消息
         new_prompt = {
             "chat_history": history[-10:] if len(history) > 10 else history,
-            "current_message": req.prompt
+            "current_message": event.message_str
         }
 
         # 将构造的 JSON 转换为字符串并赋值给 req.prompt
