@@ -21,6 +21,8 @@ class MyPlugin(Star):
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
+        logger.info(self)
+        logger.info(event)
         try:
             curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.unified_msg_origin)
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
