@@ -22,14 +22,19 @@ class MyPlugin(Star):
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
         # 打印 event 的所有字段内容
-        logger.info(f"event attributes: {vars(event)}")
-        logger.info(f"messageObject: {vars(event.message_obj)}")
+        # logger.info(f"event attributes: {vars(event)}")
+        # logger.info(f"messageObject: {vars(event.message_obj)}")
         try:
-            curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.get_group_id())
-            logger.info('curr_id: ' + (curr_cid or "None"))
+            curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.unified_msg_origin)
+            if curr_cid is None:
+                curr_cid = await self.context.conversation_manager.new_conversation(event.unified_msg_origin)
+            logger.info(f'curr_id: {str(curr_cid)}')
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
             context = json.loads(conversation.history)
-            logger.info(context)
+            logger.info(f'context: {context}')
+            # context.append({"role": "user",
+            #                 "content": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"})
+            await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, context)
         except Exception as e:
             logger.info(f"获取消息历史失败: {e}")
         pass
@@ -55,7 +60,7 @@ class MyPlugin(Star):
         # 构造新的 JSON 结构，只取最后10条消息
         new_prompt = {
             "chat_history": history[-15:] if len(history) > 15 else history,
-            "current_message": event.message_str
+            "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
         }
 
         # 将构造的 JSON 转换为字符串并赋值给 req.prompt
