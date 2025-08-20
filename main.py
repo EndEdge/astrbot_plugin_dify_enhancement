@@ -25,9 +25,9 @@ class MyPlugin(Star):
             curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.unified_msg_origin)
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
             context = json.loads(conversation.history)
-            logger.debug(context)
+            logger.info(context)
         except Exception as e:
-            logger.debug(f"获取消息历史失败: {e}")
+            logger.info(f"获取消息历史失败: {e}")
         return None
 
     @filter.on_llm_request()
@@ -45,11 +45,11 @@ class MyPlugin(Star):
 
         # 将构造的 JSON 转换为字符串并赋值给 req.prompt
         req.system_prompt = json.dumps(new_prompt, ensure_ascii=False)
-        logger.debug(req)
+        logger.info(req)
 
     @filter.on_llm_response()
     async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-        logger.debug(resp)
+        logger.info(resp)
 
         @dataclass
         class ResponseData:
