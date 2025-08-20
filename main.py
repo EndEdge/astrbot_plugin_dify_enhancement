@@ -23,7 +23,7 @@ class MyPlugin(Star):
     async def on_group_message(self, event: AstrMessageEvent):
         try:
             curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.get_group_id())
-            logger.info('curr_id:' + curr_cid)
+            logger.info('curr_id: ' + curr_cid)
             # if curr_cid is None:
             #     curr_cid = self.context.conversation_manager.new_conversation(event.get_group_id())
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
@@ -31,7 +31,12 @@ class MyPlugin(Star):
             logger.info(context)
         except Exception as e:
             logger.info(f"获取消息历史失败: {e}")
-        return None
+        pass
+
+    @filter.after_message_sent()
+    async def after_message_sent(self, event: AstrMessageEvent):
+        logger.info('group_id: ' + event.get_group_id())
+        pass
 
     @filter.on_llm_request()
     async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
