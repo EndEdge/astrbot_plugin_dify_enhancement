@@ -45,7 +45,7 @@ class MyPlugin(Star):
 
         # 构造新的 JSON 结构，只取最后10条消息
         new_prompt = {
-            "chat_history": history[-10:] if len(history) > 10 else history,
+            "chat_history": history[-15:] if len(history) > 15 else history,
             "current_message": event.message_str
         }
 
