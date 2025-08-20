@@ -5,8 +5,23 @@ from typing import Optional, Dict, Any
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.core.provider.entities import ProviderRequest, LLMResponse
 
+
+@dataclass
+class ResponseData:
+    should_reply: bool
+    reply_content: str = ""
+    source_agent: Optional[str] = None
+    debug_info: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'ResponseData':
+        return cls(
+            should_reply=data.get("should_reply", False),
+            reply_content=data.get("reply_content", ""),
+            source_agent=data.get("source_agent"),
+            debug_info=data.get("debug_info")
+        )
 
 @register("dify_enhancement", "EndEdge", "dify增强插件，增加输入内容，适配特殊的输出格式", "1.0.0")
 class MyPlugin(Star):
@@ -19,89 +34,99 @@ class MyPlugin(Star):
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
 
-    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def on_group_message(self, event: AstrMessageEvent):
-        # 打印 event 的所有字段内容
-        # logger.info(f"event attributes: {vars(event)}")
-        # logger.info(f"messageObject: {vars(event.message_obj)}")
+    @filter.event_message_type(filter.EventMessageType.ALL)
+    async def on_all_message(self, event: AstrMessageEvent):
+        # 如果消息以 '/' 开头，跳过处理
+        if event.message_str.startswith('/'):
+            event.continue_event()
+            return
         try:
             curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.unified_msg_origin)
             if curr_cid is None:
                 curr_cid = await self.context.conversation_manager.new_conversation(event.unified_msg_origin)
             logger.info(f'curr_id: {str(curr_cid)}')
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
-            context = json.loads(conversation.history)
-            logger.info(f'context: {context}')
-            # context.append({"role": "user",
-            #                 "content": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"})
-            await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, context)
-        except Exception as e:
-            logger.info(f"获取消息历史失败: {e}")
-        pass
+            history = json.loads(conversation.history)
+            curr_message = f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
 
-    @filter.after_message_sent()
-    async def after_message_sent(self, event: AstrMessageEvent):
-        # if len(event.get_group_id()):
-        #     curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.unified_msg_origin)
-        #     conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
-        #     context = json.loads(conversation.history)
-        #     context.append({"role": "user", "content": event.message_str})
-        #     await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid,
-        #                                                                 event.get_messages())
-        pass
+            provider = self.context.get_using_provider()
+            if provider is None:
+                self.context.get_provider_by_id("QQ_GROUP")
 
-    @filter.on_llm_request()
-    async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
-        uid = event.unified_msg_origin
-        curr_cid = await self.context.conversation_manager.get_curr_conversation_id(uid)
-        conversation = await self.context.conversation_manager.get_conversation(uid, curr_cid)  # Conversation
-        history = json.loads(conversation.history)  # 获取上下文
+            new_prompt = {
+                "chat_history": history[-15:] if len(history) > 15 else history,
+                "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
+            }
 
-        # 构造新的 JSON 结构，只取最后10条消息
-        new_prompt = {
-            "chat_history": history[-15:] if len(history) > 15 else history,
-            "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
-        }
-
-        # 将构造的 JSON 转换为字符串并赋值给 req.prompt
-        req.system_prompt = json.dumps(new_prompt, ensure_ascii=False)
-        logger.info(req)
-
-    @filter.on_llm_response()
-    async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-        logger.info(resp)
-
-        @dataclass
-        class ResponseData:
-            should_reply: bool
-            reply_content: str = ""
-            source_agent: Optional[str] = None
-            debug_info: Optional[Dict[str, Any]] = None
-
-            @classmethod
-            def from_dict(cls, data: dict) -> 'ResponseData':
-                return cls(
-                    should_reply=data.get("should_reply", False),
-                    reply_content=data.get("reply_content", ""),
-                    source_agent=data.get("source_agent"),
-                    debug_info=data.get("debug_info")
-                )
-        try:
-            # 获取响应文本内容
-            original_text = resp.completion_text
+            llm_response = await provider.text_chat(
+                prompt=event.message_str,
+                session_id=None,
+                contexts=[],
+                image_urls=[],
+                func_tool=None,
+                system_prompt=json.dumps(new_prompt, ensure_ascii=False)
+            )
 
             # 尝试解析文本内容中的 JSON
-            response_dict = json.loads(original_text)
+            response_text = llm_response.completion_text
+            response_dict = json.loads(response_text)
             response_data = ResponseData.from_dict(response_dict)
 
-            # 清空返回内容
-            resp.completion_text = ""
+            response = ''
 
-            # 检查 should_reply 字段
             if response_data.should_reply:
-                resp.completion_text = response_data.reply_content
+                response = response_data.reply_content
 
+            if response is not None and len(response) > 0:
+                yield event.plain_result(response)
+
+            history.append({"role": "user", "content": curr_message})
+            history.append({"role": "assistant", "content": response})
+            await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, history)
+            event.stop_event()
         except Exception as e:
-            # 清空返回内容
-            resp.completion_text = ""
-            logger.warning(f"Error processing LLM response, content cleared: {e}")
+            logger.info(f"获取消息历史失败: {e}")
+
+    # @filter.after_message_sent()
+    # async def after_message_sent(self, event: AstrMessageEvent):
+    #     pass
+    #
+    # @filter.on_llm_request()
+    # async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
+    #     uid = event.unified_msg_origin
+    #     curr_cid = await self.context.conversation_manager.get_curr_conversation_id(uid)
+    #     conversation = await self.context.conversation_manager.get_conversation(uid, curr_cid)  # Conversation
+    #     history = json.loads(conversation.history)  # 获取上下文
+    #
+    #     # 构造新的 JSON 结构，只取最后10条消息
+    #     new_prompt = {
+    #         "chat_history": history[-15:] if len(history) > 15 else history,
+    #         "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
+    #     }
+    #
+    #     # 将构造的 JSON 转换为字符串并赋值给 req.prompt
+    #     req.system_prompt = json.dumps(new_prompt, ensure_ascii=False)
+    #     logger.info(req)
+    #
+    # @filter.on_llm_response()
+    # async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
+    #     logger.info(resp)
+    #     try:
+    #         # 获取响应文本内容
+    #         original_text = resp.completion_text
+    #
+    #         # 尝试解析文本内容中的 JSON
+    #         response_dict = json.loads(original_text)
+    #         response_data = ResponseData.from_dict(response_dict)
+    #
+    #         # 清空返回内容
+    #         resp.completion_text = ""
+    #
+    #         # 检查 should_reply 字段
+    #         if response_data.should_reply:
+    #             resp.completion_text = response_data.reply_content
+    #
+    #     except Exception as e:
+    #         # 清空返回内容
+    #         resp.completion_text = ""
+    #         logger.warning(f"Error processing LLM response, content cleared: {e}")
