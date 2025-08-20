@@ -23,6 +23,7 @@ class MyPlugin(Star):
     async def on_group_message(self, event: AstrMessageEvent):
         # 打印 event 的所有字段内容
         logger.info(f"event attributes: {vars(event)}")
+        logger.info(f"messageObject: {vars(event.message_obj)}")
         try:
             curr_cid = await self.context.conversation_manager.get_curr_conversation_id(event.get_group_id())
             logger.info('curr_id: ' + (curr_cid or "None"))
