@@ -81,7 +81,9 @@ class MyPlugin(Star):
                 yield event.plain_result(response)
 
             history.append({"role": "user", "content": curr_message})
-            history.append({"role": "assistant", "content": response})
+            if response is not None and len(response) > 0:
+                history.append({"role": "assistant", "content": response})
+            history = history[-200:] if len(history) > 200 else history
             await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, history)
             event.stop_event()
         except Exception as e:
