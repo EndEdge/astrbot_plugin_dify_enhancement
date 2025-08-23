@@ -34,7 +34,7 @@ class MyPlugin(Star):
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
 
-    @filter.event_message_type(filter.EventMessageType.ALL)
+    @filter.event_message_type(filter.EventMessageType.ALL, priority=99999)
     async def on_all_message(self, event: AstrMessageEvent):
         # 如果消息以 '/' 开头，跳过处理
         if event.message_str.startswith('/'):
