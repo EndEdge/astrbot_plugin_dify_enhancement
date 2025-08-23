@@ -31,7 +31,7 @@ def get_outline_chain(chain: List[BaseMessageComponent]) -> str:
         if isinstance(i, Plain):
             outline += i.text
         elif isinstance(i, At):
-            outline += f"[At:{i.name} ({i.qq})]"
+            outline += f"[At:{i.name} (ID: {i.qq})]"
         elif isinstance(i, AtAll):
             outline += "[At:全体成员]"
         elif isinstance(i, Forward):
