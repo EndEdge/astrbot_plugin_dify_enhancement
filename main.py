@@ -49,6 +49,9 @@ class MyPlugin(Star):
             history = json.loads(conversation.history)
             curr_message = f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
 
+            logger.info(f"curr_message: {curr_message}")
+            logger.info(f"history: {history}")
+
             provider = self.context.get_using_provider()
             if provider is None:
                 self.context.get_provider_by_id("QQ_GROUP")
@@ -58,24 +61,25 @@ class MyPlugin(Star):
                 "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
             }
 
-            llm_response = await provider.text_chat(
-                prompt=event.message_str,
-                session_id=None,
-                contexts=[],
-                image_urls=[],
-                func_tool=None,
-                system_prompt=json.dumps(new_prompt, ensure_ascii=False)
-            )
+            # llm_response = await provider.text_chat(
+            #     prompt=event.message_str,
+            #     session_id=None,
+            #     contexts=[],
+            #     image_urls=[],
+            #     func_tool=None,
+            #     system_prompt=json.dumps(new_prompt, ensure_ascii=False)
+            # )
 
             # 尝试解析文本内容中的 JSON
-            response_text = llm_response.completion_text
-            response_dict = json.loads(response_text)
-            response_data = ResponseData.from_dict(response_dict)
+            # response_text = llm_response.completion_text
+            # response_text =
+            # response_dict = json.loads(response_text)
+            # response_data = ResponseData.from_dict(response_dict)
 
             response = ''
 
-            if response_data.should_reply:
-                response = response_data.reply_content
+            # if response_data.should_reply:
+            #     response = response_data.reply_content
 
             if response is not None and len(response) > 0:
                 yield event.plain_result(response)
