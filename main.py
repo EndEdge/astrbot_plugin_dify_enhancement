@@ -49,6 +49,7 @@ class MyPlugin(Star):
             history = json.loads(conversation.history)
             curr_message = f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
 
+            logger.info(f"message object: {vars(event.message_obj)}")
             logger.info(f"curr_message: {curr_message}")
             logger.info(f"history: {history}")
 
@@ -88,6 +89,7 @@ class MyPlugin(Star):
             if response is not None and len(response) > 0:
                 history.append({"role": "assistant", "content": response})
             history = history[-200:] if len(history) > 200 else history
+            logger.info(f"short history: {history}")
             await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, history)
             event.stop_event()
         except Exception as e:
