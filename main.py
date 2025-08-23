@@ -1,10 +1,11 @@
 import json
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
+from astrbot.core.message.components import BaseMessageComponent, Plain, At, AtAll, Forward, Reply
 
 
 @dataclass
@@ -22,6 +23,30 @@ class ResponseData:
             source_agent=data.get("source_agent"),
             debug_info=data.get("debug_info")
         )
+
+
+def get_outline_chain(chain: List[BaseMessageComponent]) -> str:
+    outline = ""
+    for i in chain:
+        if isinstance(i, Plain):
+            outline += i.text
+        elif isinstance(i, At):
+            outline += f"[At:{i.name} ({i.qq})]"
+        elif isinstance(i, AtAll):
+            outline += "[At:全体成员]"
+        elif isinstance(i, Forward):
+            # 转发消息
+            outline += "[转发消息]"
+        elif isinstance(i, Reply):
+            # 引用回复
+            if i.message_str:
+                outline += f"[引用消息({i.sender_nickname}: {i.message_str})]"
+            else:
+                outline += "[引用消息]"
+        else:
+            outline += f"[{i.type}]"
+        outline += " "
+    return outline
 
 
 @register("dify_enhancement", "EndEdge", "dify增强插件，增加输入内容，适配特殊的输出格式", "1.0.0")
@@ -48,7 +73,7 @@ class MyPlugin(Star):
             logger.info(f'curr_id: {str(curr_cid)}')
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
             history = json.loads(conversation.history)
-            curr_message = f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
+            curr_message = f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{get_outline_chain(event.message_obj.message)}"
 
             logger.info(f"message object: {vars(event.message_obj)}")
             logger.info(f"curr_message: {curr_message}")
@@ -59,7 +84,7 @@ class MyPlugin(Star):
 
             new_prompt = {
                 "chat_history": history[-15:] if len(history) > 15 else history,
-                "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
+                "current_message": curr_message
             }
 
             response = ''
