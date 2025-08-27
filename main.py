@@ -30,19 +30,19 @@ def get_outline_chain(chain: List[BaseMessageComponent]) -> str:
     for i in chain:
         if isinstance(i, Plain):
             outline += i.text
+        # elif isinstance(i, Image): // todo: 支持解析图片
+        #     outline += f"[图片 | 链接: {i.url}]"
         elif isinstance(i, At):
-            outline += f"[At:{i.name} (ID: {i.qq})]"
+            outline += f"@{i.name} "
         elif isinstance(i, AtAll):
-            outline += "[At:全体成员]"
+            outline += "@全体成员 "
         elif isinstance(i, Forward):
             # 转发消息
             outline += "[转发消息]"
         elif isinstance(i, Reply):
-            # 引用回复
+            # 引用回复 // todo: 支持引用图片
             if i.message_str:
-                outline += f"[引用消息({i.sender_nickname}: {i.message_str})]"
-            else:
-                outline += "[引用消息]"
+                outline += f"\n> [{i.sender_nickname}]: {i.message_str}\n"
         else:
             outline += f"[{i.type}]"
         outline += " "
@@ -73,7 +73,7 @@ class MyPlugin(Star):
             logger.info(f'curr_id: {str(curr_cid)}')
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
             history = json.loads(conversation.history)
-            curr_message = f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{get_outline_chain(event.message_obj.message)}"
+            curr_message = f"[{event.message_obj.sender.nickname}]: {get_outline_chain(event.message_obj.message)}"
 
             logger.info(f"message object: {vars(event.message_obj)}")
             logger.info(f"curr_message: {curr_message}")
@@ -165,3 +165,8 @@ class MyPlugin(Star):
     #         # 清空返回内容
     #         resp.completion_text = ""
     #         logger.warning(f"Error processing LLM response, content cleared: {e}")
+
+
+if __name__ == '__main__':
+    print(
+        "{\n  \"reasoning\": \"消息是由用户 `orenji` 发出，并且内容为『找几个超还原人声的调教』，与我上一条关于『Synthesizer V Studio 2 Pro』的回复高度相关且构成逻辑延续，属于话题连续性的延续，因此消息是指向我的。\",\n  \"should_reply\": true,\n  \"confidence\": 0.95\n}")
