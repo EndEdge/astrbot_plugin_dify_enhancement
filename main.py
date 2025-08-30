@@ -50,11 +50,11 @@ def build_message_content(message_obj: AstrBotMessage) -> str:
             # 引用回复 // todo: 支持引用图片
             if i.message_str:
                 reply_messages.append({"nickname": i.sender_nickname, "user_id": i.id, "message": i.message_str})
-        # else:
-        #     message_outline += f"[{i.type}]"
+        else:
+            message_outline += f"[{i.type}]"
         message_outline += " "
     content_map["reply_messages"] = reply_messages
-    content_map["message"] = message_outline
+    content_map["message"] = message_outline.strip()
     return json.dumps(content_map, ensure_ascii=False)
 
 
@@ -115,25 +115,25 @@ class MyPlugin(Star):
 
             response = ''
             logger.info(f"system_prompt: {json.dumps(new_prompt, ensure_ascii=False)}")
-            # try:
-            #     llm_response = await provider.text_chat(
-            #         prompt=event.message_str,
-            #         session_id=None,
-            #         contexts=[],
-            #         image_urls=[],
-            #         func_tool=None,
-            #         system_prompt=json.dumps(new_prompt, ensure_ascii=False)
-            #     )
-            #
-            #     # 尝试解析文本内容中的 JSON
-            #     response_text = llm_response.completion_text
-            #     response_dict = json.loads(response_text)
-            #     response_data = ResponseData.from_dict(response_dict)
-            #
-            #     if response_data.should_reply:
-            #         response = response_data.reply_content
-            # except Exception as e:
-            #     logger.info(f"获取 LLM 响应失败: {e}")
+            try:
+                llm_response = await provider.text_chat(
+                    prompt=event.message_str,
+                    session_id=None,
+                    contexts=[],
+                    image_urls=[],
+                    func_tool=None,
+                    system_prompt=json.dumps(new_prompt, ensure_ascii=False)
+                )
+
+                # 尝试解析文本内容中的 JSON
+                response_text = llm_response.completion_text
+                response_dict = json.loads(response_text)
+                response_data = ResponseData.from_dict(response_dict)
+
+                if response_data.should_reply:
+                    response = response_data.reply_content
+            except Exception as e:
+                logger.info(f"获取 LLM 响应失败: {e}")
 
             if response is not None and len(response) > 0:
                 yield event.plain_result(response)
