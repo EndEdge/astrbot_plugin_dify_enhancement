@@ -1,11 +1,13 @@
+import asyncio
 import json
 from dataclasses import dataclass
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from astrbot.api import logger
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.core.message.components import BaseMessageComponent, Plain, At, AtAll, Forward, Reply
+from astrbot.core.message.components import Plain, At, AtAll, Reply
+from astrbot.core.platform import AstrBotMessage
 
 
 @dataclass
@@ -25,34 +27,45 @@ class ResponseData:
         )
 
 
-def get_outline_chain(chain: List[BaseMessageComponent]) -> str:
-    outline = ""
-    for i in chain:
+def build_message_content(message_obj: AstrBotMessage) -> str:
+    content_map = {}
+    content_map["nickname"] = message_obj.sender.nickname
+    content_map["user_id"] = message_obj.sender.user_id
+
+    message_outline = ''
+    reply_messages = []
+    for i in message_obj.message:
         if isinstance(i, Plain):
-            outline += i.text
+            message_outline += i.text
         # elif isinstance(i, Image): // todo: 支持解析图片
         #     outline += f"[图片 | 链接: {i.url}]"
         elif isinstance(i, At):
-            outline += f"@{i.name} "
+            message_outline += f"@{i.name}"
         elif isinstance(i, AtAll):
-            outline += "@全体成员 "
-        elif isinstance(i, Forward):
-            # 转发消息
-            outline += "[转发消息]"
+            message_outline += "@全体成员"
+        # elif isinstance(i, Forward):
+        #     # 转发消息
+        #     outline += "[转发消息]"
         elif isinstance(i, Reply):
             # 引用回复 // todo: 支持引用图片
             if i.message_str:
-                outline += f"\n> [{i.sender_nickname}]: {i.message_str}\n"
-        else:
-            outline += f"[{i.type}]"
-        outline += " "
-    return outline
+                reply_messages.append({"nickname": i.sender_nickname, "user_id": i.id, "message": i.message_str})
+        # else:
+        #     message_outline += f"[{i.type}]"
+        message_outline += " "
+    content_map["reply_messages"] = reply_messages
+    content_map["message"] = message_outline
+    return json.dumps(content_map, ensure_ascii=False)
 
 
 @register("dify_enhancement", "EndEdge", "dify增强插件，增加输入内容，适配特殊的输出格式", "1.0.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        # 用于存储每个 conversation ID 对应的锁
+        self.conversation_locks = {}
+        # 保护 conversation_locks 的访问
+        self.locks_lock = asyncio.Lock()
 
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
@@ -73,7 +86,7 @@ class MyPlugin(Star):
             logger.info(f'curr_id: {str(curr_cid)}')
             conversation = await self.context.conversation_manager.get_conversation(event.unified_msg_origin, curr_cid)
             history = json.loads(conversation.history)
-            curr_message = f"[{event.message_obj.sender.nickname}]: {get_outline_chain(event.message_obj.message)}"
+            curr_message = build_message_content(event.message_obj)
 
             logger.info(f"message object: {vars(event.message_obj)}")
             logger.info(f"curr_message: {curr_message}")
@@ -86,6 +99,19 @@ class MyPlugin(Star):
                 "chat_history": history[-15:] if len(history) > 15 else history,
                 "current_message": curr_message
             }
+
+            # 获取或创建针对当前 conversation ID 的锁
+            async with self.locks_lock:
+                if curr_cid not in self.conversation_locks:
+                    self.conversation_locks[curr_cid] = asyncio.Lock()
+                conversation_lock = self.conversation_locks[curr_cid]
+
+            # 使用锁保护对 conversation history 的更新操作
+            async with conversation_lock:
+                history = json.loads(conversation.history)
+                history.append({"role": "user", "content": curr_message})
+                history = history[-200:] if len(history) > 200 else history
+                await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, history)
 
             response = ''
             try:
@@ -110,63 +136,14 @@ class MyPlugin(Star):
 
             if response is not None and len(response) > 0:
                 yield event.plain_result(response)
+                # 使用锁保护对 conversation history 的更新操作
+                async with conversation_lock:
+                    history = json.loads(conversation.history)
+                    history.append({"role": "assistant", "content": response})
+                    history = history[-200:] if len(history) > 200 else history
+                    await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid,
+                                                                                history)
 
-            history.append({"role": "user", "content": curr_message})
-            if response is not None and len(response) > 0:
-                history.append({"role": "assistant", "content": response})
-
-            history = history[-200:] if len(history) > 200 else history
-            logger.info(f"short history: {history[-3:] if len(history) > 3 else history}")
-            await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, history)
             event.stop_event()
         except Exception as e:
             logger.info(f"获取消息历史失败: {e}")
-
-    # @filter.after_message_sent()
-    # async def after_message_sent(self, event: AstrMessageEvent):
-    #     pass
-    #
-    # @filter.on_llm_request()
-    # async def on_llm_request(self, event: AstrMessageEvent, req: ProviderRequest):
-    #     uid = event.unified_msg_origin
-    #     curr_cid = await self.context.conversation_manager.get_curr_conversation_id(uid)
-    #     conversation = await self.context.conversation_manager.get_conversation(uid, curr_cid)  # Conversation
-    #     history = json.loads(conversation.history)  # 获取上下文
-    #
-    #     # 构造新的 JSON 结构，只取最后10条消息
-    #     new_prompt = {
-    #         "chat_history": history[-15:] if len(history) > 15 else history,
-    #         "current_message": f"\n[User ID: {event.message_obj.sender.user_id}, Nickname: {event.message_obj.sender.nickname}]\n{event.message_obj.message_str}"
-    #     }
-    #
-    #     # 将构造的 JSON 转换为字符串并赋值给 req.prompt
-    #     req.system_prompt = json.dumps(new_prompt, ensure_ascii=False)
-    #     logger.info(req)
-    #
-    # @filter.on_llm_response()
-    # async def on_llm_resp(self, event: AstrMessageEvent, resp: LLMResponse):
-    #     logger.info(resp)
-    #     try:
-    #         # 获取响应文本内容
-    #         original_text = resp.completion_text
-    #
-    #         # 尝试解析文本内容中的 JSON
-    #         response_dict = json.loads(original_text)
-    #         response_data = ResponseData.from_dict(response_dict)
-    #
-    #         # 清空返回内容
-    #         resp.completion_text = ""
-    #
-    #         # 检查 should_reply 字段
-    #         if response_data.should_reply:
-    #             resp.completion_text = response_data.reply_content
-    #
-    #     except Exception as e:
-    #         # 清空返回内容
-    #         resp.completion_text = ""
-    #         logger.warning(f"Error processing LLM response, content cleared: {e}")
-
-
-if __name__ == '__main__':
-    print(
-        "{\n  \"reasoning\": \"消息是由用户 `orenji` 发出，并且内容为『找几个超还原人声的调教』，与我上一条关于『Synthesizer V Studio 2 Pro』的回复高度相关且构成逻辑延续，属于话题连续性的延续，因此消息是指向我的。\",\n  \"should_reply\": true,\n  \"confidence\": 0.95\n}")
