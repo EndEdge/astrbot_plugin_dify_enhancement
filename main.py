@@ -89,7 +89,7 @@ class MyPlugin(Star):
             curr_message = build_message_content(event.message_obj)
 
             logger.info(f"message object: {vars(event.message_obj)}")
-            logger.info(f"curr_message: {curr_message}")
+            # logger.info(f"curr_message: {curr_message}")
 
             provider = self.context.get_using_provider()
             if provider is None:
@@ -114,25 +114,26 @@ class MyPlugin(Star):
                 await self.context.conversation_manager.update_conversation(event.unified_msg_origin, curr_cid, history)
 
             response = ''
-            try:
-                llm_response = await provider.text_chat(
-                    prompt=event.message_str,
-                    session_id=None,
-                    contexts=[],
-                    image_urls=[],
-                    func_tool=None,
-                    system_prompt=json.dumps(new_prompt, ensure_ascii=False)
-                )
-
-                # 尝试解析文本内容中的 JSON
-                response_text = llm_response.completion_text
-                response_dict = json.loads(response_text)
-                response_data = ResponseData.from_dict(response_dict)
-
-                if response_data.should_reply:
-                    response = response_data.reply_content
-            except Exception as e:
-                logger.info(f"获取 LLM 响应失败: {e}")
+            logger.info(f"system_prompt: {json.dumps(new_prompt, ensure_ascii=False)}")
+            # try:
+            #     llm_response = await provider.text_chat(
+            #         prompt=event.message_str,
+            #         session_id=None,
+            #         contexts=[],
+            #         image_urls=[],
+            #         func_tool=None,
+            #         system_prompt=json.dumps(new_prompt, ensure_ascii=False)
+            #     )
+            #
+            #     # 尝试解析文本内容中的 JSON
+            #     response_text = llm_response.completion_text
+            #     response_dict = json.loads(response_text)
+            #     response_data = ResponseData.from_dict(response_dict)
+            #
+            #     if response_data.should_reply:
+            #         response = response_data.reply_content
+            # except Exception as e:
+            #     logger.info(f"获取 LLM 响应失败: {e}")
 
             if response is not None and len(response) > 0:
                 yield event.plain_result(response)
